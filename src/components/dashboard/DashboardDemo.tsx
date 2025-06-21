@@ -131,7 +131,7 @@ const RequestsPage = () => {
 
   return (
     <div className="requests-page">
-      <h1>Customer Service Requests</h1>
+      <h1>Compliance Dashboard Requests</h1>
       <div className="new-request">
         <h2>Add New Request</h2>
         <input

@@ -1,30 +1,18 @@
-// pages/api/markReviewed.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
-import {
-  initializeApp,
-  cert,
-  getApp,
-  getApps,
-  App
-} from 'firebase-admin/app'
+import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 
-// — your excelsior-99019 service account from env
-const SA = {
-  projectId:   process.env.EXCELSIOR_PROJECT_ID!,
-  clientEmail: process.env.EXCELSIOR_CLIENT_EMAIL!,
-  privateKey:  process.env.EXCELSIOR_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+if (!getApps().length) {
+  initializeApp({
+    credential: cert({
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    }),
+  })
 }
 
-// use a named app
-const APP_NAME = 'excelsior-data'
-let dataApp: App
-try {
-  dataApp = getApp(APP_NAME)
-} catch {
-  dataApp = initializeApp({ credential: cert(SA) }, APP_NAME)
-}
-const db = getFirestore(dataApp)
+const db = getFirestore()
 
 const ALLOWED = [
   'daily_exceeding_t3global',
@@ -44,30 +32,30 @@ export default async function handler(
     return res.status(405).end('Method Not Allowed')
   }
 
-  const { collection, id } = req.body as {
+  const { collection, id, reviewedBy } = req.body as {
     collection?: string
     id?: string
+    reviewedBy?: string
   }
 
   if (
     typeof collection !== 'string' ||
     !ALLOWED.includes(collection) ||
-    typeof id !== 'string'
+    typeof id !== 'string' ||
+    typeof reviewedBy !== 'string'
   ) {
     return res.status(400).json({ error: 'Invalid payload' })
   }
 
   try {
-    // Set reviewed flag + timestamp
-    await db
-      .collection(collection)
-      .doc(id)
-      .update({
-        reviewed: true,
-        reviewedAt: new Date().toISOString(),
-      })
+    const reviewedAt = new Date().toISOString()
+    await db.collection(collection).doc(id).update({
+      reviewed: true,
+      reviewedBy,
+      reviewedAt,
+    })
 
-    return res.status(200).json({ success: true })
+    return res.status(200).json({ reviewedAt })
   } catch (err: any) {
     console.error('❌ markReviewed error:', err)
     return res.status(500).json({ error: err.message })

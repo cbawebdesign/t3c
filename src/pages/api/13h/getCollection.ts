@@ -11,9 +11,9 @@ import { getFirestore } from 'firebase-admin/firestore'
 
 // ─── Load your excelsior-99019 service account from env ────────────
 const SA = {
-  projectId:   process.env.EXCELSIOR_PROJECT_ID!,
-  clientEmail: process.env.EXCELSIOR_CLIENT_EMAIL!,
-  privateKey:  process.env.EXCELSIOR_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+  projectId:   process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+  clientEmail: process.env.SERVICE_ACCOUNT_CLIENT_EMAIL!,
+  privateKey:  process.env.SERVICE_ACCOUNT_PRIVATE_KEY!.replace(/\\n/g, '\n'),
 }
 
 // ─── Use a named Admin app to avoid collisions ───────────────────────

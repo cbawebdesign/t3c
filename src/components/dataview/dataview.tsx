@@ -112,7 +112,7 @@ export default function DataViewer() {
   ) => {
     e.stopPropagation()
     if (!user?.email) return
-    const res = await fetch('/api/markReviewed', {
+    const res = await fetch('/api/review/review', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
