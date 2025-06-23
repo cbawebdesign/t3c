@@ -1,191 +1,220 @@
-import { useState, useEffect } from 'react';
-import { getStorage, ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { initialize, document } from '@ironcorelabs/ironweb';
+// pages/oba.tsx
+import React, { useState, useEffect } from 'react'
+import { initializeApp } from 'firebase/app'
+import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  User as FirebaseUser,
+} from 'firebase/auth'
 
-export default function UploadPage() {
-  const [files, setFiles] = useState<FileList | null>(null);
-  const [isSdkInitialized, setSdkInitialized] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0); // Add this line
-  const [uploadedFiles, setUploadedFiles] = useState<{ fileName: string, group: string }[]>([]);
-  const [uploadSuccess, setUploadSuccess] = useState(false);
-  const [selectedCategories, setSelectedCategories] = useState<string>('');
-  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
-  const categories = ['Final Q4 CAS', '2024TaxEstimates','Distributions2025','Quarterly Report Q4-2024', 'CAS24Q4', 'Financials-Q42024', 'Quarterly Report Q3-2024', 'Financials-Q32024', 'CAS24Q3', 'Quarterly Report Q2-2024', 'CAS24Q2','Financials-Q2024','Newsletter Q3-2024','Test','K1-2024', 'Quarterly Report Q1-2024','Quarterly Report Q4-2023', 'Financials-Q12024','Financials-Q42023', 'CAS23Q4', 'CAS24Q1', 'CAS23Q4', 'CAS23Q3', 'CAS23Q2', 'Distributions2023', 'Distributions2024'];
-  const [hasError, setHasError] = useState(false);
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID!,
+}
+
+const app = initializeApp(firebaseConfig)
+const auth = getAuth(app)
+
+export default function OBAViewer() {
+  // Auth state
+  const [user, setUser] = useState<FirebaseUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [authError, setAuthError] = useState<string | null>(null)
 
   useEffect(() => {
-    initialize(
-      () => fetch('https://us-central1-test7-8a527.cloudfunctions.net/generateJwt')
-        .then(response => response.text()),
-      () => Promise.resolve('testpassword'),
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setUser(u)
+      setAuthLoading(false)
+    })
+    return () => unsub()
+  }, [])
+
+  const login = async () => {
+    setAuthError(null)
+    try {
+      await signInWithEmailAndPassword(auth, email, password)
+      setEmail('')
+      setPassword('')
+    } catch (e: any) {
+      setAuthError(e.message)
+    }
+  }
+
+  const logout = async () => {
+    await signOut(auth)
+  }
+
+  // Data & UI state
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [showOnlyUnreviewed, setShowOnlyUnreviewed] = useState(false)
+  const [docs, setDocs] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const loadData = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      let url = '/api/13h/getCollection?collection=OBA'
+      if (startDate && endDate) {
+        url += `&startDate=${startDate}&endDate=${endDate}`
+      }
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(await res.text())
+      let data = await res.json()
+      if (showOnlyUnreviewed) data = data.filter((d: any) => !d.reviewed)
+      setDocs(data)
+    } catch (e: any) {
+      setError(e.message)
+      setDocs([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const markReviewed = async (
+    docId: string,
+    idx: number,
+    e: React.MouseEvent<HTMLButtonElement>
+  ) => {
+    e.stopPropagation()
+    if (!user?.email) return
+    const confirmed = confirm('Do you confirm reviewing this file?')
+    if (!confirmed) return
+    const res = await fetch('/api/review/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ collection: 'OBA', id: docId, reviewedBy: user.email }),
+    })
+    if (!res.ok) {
+      alert(await res.text())
+      return
+    }
+    const { reviewedAt } = await res.json()
+    setDocs((prev) => {
+      const updated = [...prev]
+      updated[idx] = { ...updated[idx], reviewed: true, reviewedBy: user.email, reviewedAt }
+      return updated
+    })
+  }
+
+  useEffect(() => {
+    if (user) loadData()
+  }, [user])
+
+  if (authLoading) return <p className="p-6">Checking authentication…</p>
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black text-gray-200 p-6">
+        <div className="max-w-md w-full space-y-4">
+          <h1 className="text-2xl font-bold">Sign In</h1>
+          {authError && <p className="text-red-400">{authError}</p>}
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full p-2 bg-gray-800 border border-gray-600 rounded"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full p-2 bg-gray-800 border border-gray-600 rounded"
+          />
+          <button onClick={login} className="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded">
+            Sign In
+          </button>
+        </div>
+      </div>
     )
-    .then(() => setSdkInitialized(true))
-    .catch((error: Error) => console.error('Error initializing IronWeb SDK:', error));
-  }, []);
+  }
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setFiles(event.target.files);
-  };
-
-  const handleUpload = async () => {
-    if (!files || !isSdkInitialized) return;
-// Check if a category is selected
-if (!selectedCategories) {
-  alert('Please select a category before uploading.');
-  return;
-}
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const storage = getStorage();
-      const storageRef = ref(storage, 'groups/' + file.name);
-
-      const uploadTask = uploadBytesResumable(storageRef, file);
-
-      uploadTask.on('state_changed', 
-        (snapshot) => {
-          var progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(progress); // Update the progress
-          console.log('Upload is ' + progress + '% done');
-        }, 
-        (error) => {
-          console.log(error);
-        }, 
-        async () => {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          console.log('File available at', downloadURL);
-
-          // Convert the download URL string to a Uint8Array
-          const urlUint8Array = new TextEncoder().encode(downloadURL);
-
-          // Encrypt the URL
-          const encryptedUrlResult = await document.encrypt(urlUint8Array);
-
-          // Convert the encrypted URL to a base64 string
-          const encryptedUrl = btoa(String.fromCharCode(...new Uint8Array(encryptedUrlResult.document)));
-
-          // Convert the fileName to a Uint8Array
-          const fileNameUint8Array = new TextEncoder().encode(file.name);
-
-          // Encrypt the fileName
-          const encryptedFileNameResult = await document.encrypt(fileNameUint8Array);
-
-          // Convert the encrypted fileName to a base64 string
-          const encryptedFileName = btoa(String.fromCharCode(...new Uint8Array(encryptedFileNameResult.document)));
-
-          // Make a request to your API to update the group document
-          const response = await fetch('/api/uploads/uploads', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              fileName: encryptedFileName,
-              url: encryptedUrl,
-              originalFileName: file.name, // Send the original file name
-              categories: selectedCategories, // Send the selected categories
-            }),
-          });
-// In your API request, add the error message to the uploadErrors array
-if (!response.ok) {
-  const errorData = await response.json();
-  setUploadErrors(prevErrors => [...prevErrors, errorData.error]);
-  setHasError(true); // Set hasError to true
-} else {
-            const data = await response.json();
-            console.log(data);
-            // After a file is uploaded, add its name to the state
-            setUploadedFiles(prevFiles => [...prevFiles, { fileName: file.name, group: data.group }]);
-            // Set uploadSuccess to true
-            setUploadSuccess(true);
-          }
-        }
-      );
-    }
-  };
-  const handleCategoryChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = event.target;
-    if (checked) {
-      setSelectedCategories(name);
-
-    } else {
-      setSelectedCategories('');
-    }
-  };
-  const buttonStyle = {
-    backgroundColor: '#0000FF', /* Dark Blue */
-    border: 'none',
-    color: 'white',
-    padding: '15px 32px',
-    textAlign: 'center' as 'center',
-    textDecoration: 'none',
-    display: 'inline-block',
-    fontSize: '16px',
-    margin: '4px 2px',
-    cursor: 'pointer',
-    borderRadius: '12px', // This will make the edges rounded
-    boxShadow: '0px 8px 15px rgba(0, 0, 0, 0.1)', // This will add a shadow
-  };
-  const uploadedFileStyle = {
-    marginTop: '20px', 
-    marginBottom: '20px', 
-    border: '1px solid #0000FF', 
-    padding: '10px',
-    borderRadius: '15px', // This will make the border rounded
-    boxShadow: '5px 5px 15px rgba(0, 0, 0, 0.3)', // This will give it a 3D effect
-  };
-  const categoryStyle = {
-    display: 'inline-block',
-    margin: '10px',
-    padding: '10px',
-    borderRadius: '5px',
-    backgroundColor: '#f2f2f2',
-  };
-  const checkboxStyle = {
-    backgroundColor: '#ffffff',
-  };
   return (
-    <div style={{ marginTop: '50px' }}>
-      <input 
-        type="file" 
-        multiple 
-        onChange={handleFileChange} 
-        id="fileInput" 
-        style={{ display: 'none' }}
-      />
-      <label htmlFor="fileInput" style={buttonStyle}>Choose Files</label>
-      <button style={buttonStyle} onClick={handleUpload}>Upload</button>
-  
-      {/* Add the checkboxes here */}
-      <div>
-        {categories.map((category, index) => (
-    <div key={index} style={categoryStyle}>
-    <input 
-              type="checkbox" 
-              id={`category-${index}`} 
-              name={category} 
-              onChange={handleCategoryChange}
-              style={buttonStyle}
-            />
-      <label htmlFor={`category-${index}`} style={{ color: '#000000' }}>{category}</label>
-          </div>
+    <div className="min-h-screen bg-black text-gray-200 p-6">
+      {/* Header */}
+      <header className="flex flex-wrap justify-between items-center mb-6 gap-4">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold">OBA Files</h1>
+          <button onClick={loadData} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm">
+            {loading ? 'Loading…' : 'Refresh'}
+          </button>
+        </div>
+        <div className="flex items-center gap-4">
+          <p className="text-sm">Signed in as {user.email}</p>
+          <button onClick={logout} className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm">
+            Sign Out
+          </button>
+        </div>
+      </header>
+
+      {/* Controls */}
+      <div className="flex flex-wrap items-end gap-4 mb-4">
+        <label className="flex flex-col">
+          Start Date:
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="mt-1 p-2 bg-gray-800 border border-gray-600 rounded"
+          />
+        </label>
+        <label className="flex flex-col">
+          End Date:
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="mt-1 p-2 bg-gray-800 border border-gray-600 rounded"
+          />
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={showOnlyUnreviewed}
+            onChange={(e) => setShowOnlyUnreviewed(e.target.checked)}
+          />
+          <span>Only Unreviewed</span>
+        </label>
+      </div>
+
+      {/* List */}
+      <div className="space-y-4">
+        {docs.map((doc, i) => (
+          <details key={doc.id} className="bg-gray-900 rounded-lg border border-gray-700">
+            <summary className="flex justify-between px-4 py-2 cursor-pointer hover:bg-gray-800">
+              <span className="font-medium">{doc.id}</span>
+              <button onClick={(e) => { e.stopPropagation(); window.open(doc.downloadURL!, '_blank') }} className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm">
+                Download File
+              </button>
+            </summary>
+            <div className="px-4 py-2 space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <button
+                  onClick={(e) => markReviewed(doc.id, i, e)}
+                  disabled={doc.reviewed}
+                  className={`px-3 py-1 rounded text-sm transition transform ${doc.reviewed ? 'bg-gray-700 cursor-default' : 'bg-blue-600 hover:bg-blue-700 scale-110'}`}>
+                  {doc.reviewed ? 'Reviewed' : 'Review'}
+                </button>
+                {doc.reviewed && <span className="text-xs text-green-400">by {doc.reviewedBy} @ {new Date(doc.reviewedAt).toLocaleString()}</span>}
+              </div>
+              <p><strong>Month:</strong> {doc.Month}</p>
+              <p><strong>Year:</strong> {doc.Year}</p>
+            </div>
+          </details>
         ))}
       </div>
-  
-      <div style={{ marginTop: '20px' }}>
-        <progress value={uploadProgress} max="100" style={{ width: '50%', height: '20px', borderRadius: '10px', overflow: 'hidden' }} />
-      </div>
-      {uploadSuccess && <p style={{ color: 'green' }}>Upload successful!</p>}
-{hasError && uploadErrors.map((error, index) => (
-  <p key={index} style={{ color: 'red' }}>{error}</p> // Display the error messages in red
-))}     <div>
-        <h2 style={{ marginTop: '20px' }}>Uploaded files:</h2>
-        {uploadedFiles.map((file, index) => (
-  <div key={index} style={uploadedFileStyle}>
-    <h2 style={{ color: '#0000FF' }}>File: {file.fileName}</h2>
-    <p>Group: {file.group}</p>
-  </div>
-))}
-      </div>
     </div>
-  );
+  )
 }

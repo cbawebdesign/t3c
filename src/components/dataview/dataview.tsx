@@ -19,7 +19,6 @@ const firebaseConfig = {
   measurementId:       process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID!,
 }
 
-// initialize Firebase client app
 const app = initializeApp(firebaseConfig)
 const auth = getAuth(app)
 
@@ -33,7 +32,6 @@ const COLLECTIONS = [
 ]
 
 export default function DataViewer() {
-  // ── Auth state ──────────────────────────────────────────────────────
   const [user, setUser] = useState<FirebaseUser | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [email, setEmail] = useState('')
@@ -63,23 +61,27 @@ export default function DataViewer() {
     await signOut(auth)
   }
 
-  // ── Data & UI state ────────────────────────────────────────────────
   const [collection, setCollection] = useState(COLLECTIONS[0])
-  const [date, setDate]             = useState('')
-  const [docs, setDocs]             = useState<any[]>([])
-  const [cols, setCols]             = useState<string[]>([])
-  const [loading, setLoading]       = useState(false)
-  const [error, setError]           = useState<string | null>(null)
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
+  const [showOnlyUnreviewed, setShowOnlyUnreviewed] = useState(false)
+  const [docs, setDocs] = useState<any[]>([])
+  const [cols, setCols] = useState<string[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const loadData = async () => {
     setLoading(true)
     setError(null)
     try {
       let url = `/api/13h/getCollection?collection=${collection}`
-      if (date) url += `&date=${date}`
+      if (startDate && endDate) url += `&startDate=${startDate}&endDate=${endDate}`
       const res = await fetch(url)
       if (!res.ok) throw new Error(await res.text())
-      const data = await res.json()
+      let data = await res.json()
+      if (showOnlyUnreviewed) {
+        data = data.filter((d: any) => !d.reviewed)
+      }
       if (!Array.isArray(data) || data.length === 0) {
         setDocs([])
         setCols([])
@@ -89,10 +91,9 @@ export default function DataViewer() {
         const allKeys = Array.from(
           new Set(data.flatMap((d: any) => Object.keys(d)))
         )
-        const scalarKeys = allKeys.filter(
-          (k) =>
-            !['reviewed', 'reviewedBy', 'reviewedAt'].includes(k) &&
-            !data.some((d) => Array.isArray(d[k]))
+        const scalarKeys = allKeys.filter((k) =>
+          !['reviewed', 'reviewedBy', 'reviewedAt'].includes(k) &&
+          !data.some((d: any) => Array.isArray(d[k]))
         )
         setCols(scalarKeys)
       }
@@ -112,6 +113,8 @@ export default function DataViewer() {
   ) => {
     e.stopPropagation()
     if (!user?.email) return
+    const confirmed = confirm('Do you confirm you are reviewing this document?')
+    if (!confirmed) return
     const res = await fetch('/api/review/review', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -138,36 +141,35 @@ export default function DataViewer() {
     })
   }
 
-  // ── Render ─────────────────────────────────────────────────────────
-  if (authLoading) {
-    return <p className="p-6">Checking authentication…</p>
+  const downloadCSV = (doc: any) => {
+    const arrayFields = Object.entries(doc).filter(([, v]) => Array.isArray(v))
+    arrayFields.forEach(([field, rows]) => {
+      const rowList = rows as Record<string, any>[]
+      const headers = Object.keys(rowList[0] || {})
+      const lines = [(field.toUpperCase() + ',' + headers.join(','))]
+      for (const row of rowList) {
+        lines.push(',' + headers.map((h) => JSON.stringify(row[h] ?? '')).join(','))
+      }
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${doc.id}_${field}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    })
   }
+
+  if (authLoading) return <p className="p-6">Checking authentication…</p>
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black text-gray-200 p-6">
         <div className="max-w-md w-full space-y-4">
           <h1 className="text-2xl font-bold">Sign In</h1>
           {authError && <p className="text-red-400">{authError}</p>}
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full p-2 bg-gray-800 border border-gray-600 rounded"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full p-2 bg-gray-800 border border-gray-600 rounded"
-          />
-          <button
-            onClick={login}
-            className="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded"
-          >
-            Sign In
-          </button>
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="w-full p-2 bg-gray-800 border border-gray-600 rounded" />
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="w-full p-2 bg-gray-800 border border-gray-600 rounded" />
+          <button onClick={login} className="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded">Sign In</button>
         </div>
       </div>
     )
@@ -177,92 +179,73 @@ export default function DataViewer() {
     <div className="min-h-screen bg-black text-gray-200 p-6">
       <header className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Data Viewer</h1>
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center gap-4">
           <p className="text-sm">Signed in as {user.email}</p>
-          <button
-            onClick={logout}
-            className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm"
-          >
-            Sign Out
-          </button>
+          <button onClick={logout} className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm">Sign Out</button>
         </div>
       </header>
 
-      {/* Controls */}
-      <div className="flex flex-wrap items-end gap-4 mb-4">
+      <div className="flex flex-wrap gap-4 items-end mb-4">
         <label className="flex flex-col">
           Collection:
-          <select
-            className="mt-1 p-2 bg-gray-800 border border-gray-600 rounded"
-            value={collection}
-            onChange={(e) => setCollection(e.target.value)}
-          >
+          <select value={collection} onChange={(e) => setCollection(e.target.value)} className="mt-1 p-2 bg-gray-800 border border-gray-600 rounded">
             {COLLECTIONS.map((c) => (
-              <option key={c} value={c}>
-                {c.replace(/_/g, ' ')}
-              </option>
+              <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
             ))}
           </select>
         </label>
 
         <label className="flex flex-col">
-          Date:
-          <input
-            type="date"
-            className="mt-1 p-2 bg-gray-800 border border-gray-600 rounded"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
+          Start Date:
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="mt-1 p-2 bg-gray-800 border border-gray-600 rounded" />
         </label>
 
-        <button
-          onClick={loadData}
-          disabled={loading}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded"
-        >
+        <label className="flex flex-col">
+          End Date:
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="mt-1 p-2 bg-gray-800 border border-gray-600 rounded" />
+        </label>
+
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={showOnlyUnreviewed} onChange={(e) => setShowOnlyUnreviewed(e.target.checked)} />
+          <span>Only Unreviewed</span>
+        </label>
+
+        <button onClick={loadData} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded">
           {loading ? 'Loading…' : 'Load'}
         </button>
       </div>
 
       {error && <p className="text-red-400 mb-4">{error}</p>}
 
-      {/* Results */}
       <div className="space-y-6">
         {docs.map((doc, i) => {
-          const arrayFields = Object.entries(doc).filter(
-            ([, v]) => Array.isArray(v) && (v as any[]).length > 0
-          )
+          const arrayFields = Object.entries(doc).filter(([, v]) => Array.isArray(v) && (v as any[]).length > 0)
           return (
-            <details
-              key={doc.id}
-              className="bg-gray-900 rounded-lg border border-gray-700"
-            >
+            <details key={doc.id} className="bg-gray-900 rounded-lg border border-gray-700">
               <summary className="flex justify-between px-4 py-2 cursor-pointer hover:bg-gray-800">
                 <span className="font-medium">{doc.id}</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) => markReviewed(doc.id, i, e)}
-                    disabled={doc.reviewed}
-                    className={`px-3 py-1 rounded text-sm ${
-                      doc.reviewed
-                        ? 'bg-gray-700 cursor-default'
-                        : 'bg-blue-600 hover:bg-blue-700'
-                    }`}
-                  >
-                    {doc.reviewed ? 'Reviewed' : 'Review'}
-                  </button>
-                  {doc.reviewed && (
-                    <span className="text-xs text-green-400">
-                      by {doc.reviewedBy} @{' '}
-                      {new Date(doc.reviewedAt).toLocaleString()}
-                    </span>
-                  )}
-                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); downloadCSV(doc) }}
+                  className="px-3 py-1 rounded bg-green-600 hover:bg-green-700 text-sm"
+                >
+                  Download CSV
+                </button>
               </summary>
-
               <div className="px-4 py-2 space-y-4 text-xs">
-                {/* Scalar fields grid */}
+                <div className="flex justify-between items-center">
+                  <div>
+                    {doc.reviewed ? (
+                      <span className="text-xs text-green-400">Reviewed by {doc.reviewedBy} @ {new Date(doc.reviewedAt).toLocaleString()}</span>
+                    ) : (
+                      <button
+                        onClick={(e) => markReviewed(doc.id, i, e)}
+                        className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-xs"
+                      >
+                        Review
+                      </button>
+                    )}
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   {cols.map((key) => (
                     <div key={key}>
@@ -271,45 +254,26 @@ export default function DataViewer() {
                     </div>
                   ))}
                 </div>
-
-                {/* Array fields as tables */}
                 {arrayFields.map(([field, arr]) => {
                   const rows = arr as Record<string, any>[]
                   const headers = Object.keys(rows[0] || {})
                   return (
                     <div key={field}>
-                      <h3 className="font-semibold text-gray-300 mb-2">
-                        {field}
-                      </h3>
+                      <h3 className="font-semibold text-gray-300 mb-2">{field}</h3>
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs border-collapse">
                           <thead>
                             <tr className="bg-gray-800">
                               {headers.map((h) => (
-                                <th
-                                  key={h}
-                                  className="border border-gray-700 px-2 py-1 text-left"
-                                >
-                                  {h}
-                                </th>
+                                <th key={h} className="border border-gray-700 px-2 py-1 text-left">{h}</th>
                               ))}
                             </tr>
                           </thead>
                           <tbody>
                             {rows.map((row, idx) => (
-                              <tr
-                                key={idx}
-                                className={
-                                  idx % 2 === 0 ? 'bg-gray-900' : 'bg-gray-800'
-                                }
-                              >
+                              <tr key={idx} className={idx % 2 === 0 ? 'bg-gray-900' : 'bg-gray-800'}>
                                 {headers.map((h) => (
-                                  <td
-                                    key={h}
-                                    className="border border-gray-700 px-2 py-1"
-                                  >
-                                    {String(row[h])}
-                                  </td>
+                                  <td key={h} className="border border-gray-700 px-2 py-1">{String(row[h])}</td>
                                 ))}
                               </tr>
                             ))}
