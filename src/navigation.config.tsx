@@ -3,13 +3,7 @@ import { Cog8ToothIcon, ShieldCheckIcon, CodeBracketIcon, Squares2X2Icon, Magnif
 
 const NAVIGATION_CONFIG = {
   items: [
-    {
-      label: 'common:dashboardTabLabel',
-      path: configuration.paths.appHome,
-      Icon: ({ className }: { className: string }) => {
-        return <CheckCircleIcon className={className} />;
-      },
-    },
+
    
     {
       label: 'common:searchLabel',
@@ -26,8 +20,15 @@ const NAVIGATION_CONFIG = {
       },
     },
     {
+      label: 'common:dashboardTabLabel',
+      path: configuration.paths.appHome,
+      Icon: ({ className }: { className: string }) => {
+        return <CheckCircleIcon className={className} />;
+      },
+    },
+    {
       label: 'common:adminLabel',
-      path: '/admin',
+      path: '/docs',
       Icon: ({ className }: { className: string }) => {
         return <ShieldCheckIcon
         className={className} />;
