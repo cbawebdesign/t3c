@@ -21,6 +21,7 @@ const ALLOWED = [
   'dailytotals_t3trading',
   'monthly_exceeding_t3global',
   'monthly_exceeding_t3trading',
+  'OBA'
 ]
 
 export default async function handler(
