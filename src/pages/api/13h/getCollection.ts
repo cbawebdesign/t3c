@@ -29,7 +29,11 @@ const ALLOWED = [
   'monthly_exceeding_t3global',
   'monthly_exceeding_t3trading',
   'OBA',
+<<<<<<< HEAD
   'LocatesData',          // ← renamed
+=======
+  'Locates',
+>>>>>>> eff7a4428ac11e26b85b28ef22b2758fae631b2b
 ]
 
 export default async function handler(
@@ -84,8 +88,13 @@ export default async function handler(
       docs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     }
 
+<<<<<<< HEAD
     // 4) For LocatesData: collapse top-level numeric keys into rows[]
     if (collection === 'LocatesData') {
+=======
+    // 4) For Locates: collapse top-level numeric keys into rows[]
+    if (collection === 'Locates') {
+>>>>>>> eff7a4428ac11e26b85b28ef22b2758fae631b2b
       docs = docs.map(doc => {
         const rows: any[] = []
         const out: any = { id: doc.id }
@@ -93,7 +102,11 @@ export default async function handler(
           if (/^\d+$/.test(k)) {
             rows.push(v)
           } else if (k !== 'id') {
+<<<<<<< HEAD
             out[k] = v    // ← this automatically includes any extra field you have
+=======
+            out[k] = v
+>>>>>>> eff7a4428ac11e26b85b28ef22b2758fae631b2b
           }
         }
         out.rows = rows

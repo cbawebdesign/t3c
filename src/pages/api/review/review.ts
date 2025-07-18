@@ -1,9 +1,15 @@
+<<<<<<< HEAD
 // pages/api/review/review.ts
+=======
+>>>>>>> eff7a4428ac11e26b85b28ef22b2758fae631b2b
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 
+<<<<<<< HEAD
 // Initialize Firebase Admin if needed
+=======
+>>>>>>> eff7a4428ac11e26b85b28ef22b2758fae631b2b
 if (!getApps().length) {
   initializeApp({
     credential: cert({
@@ -24,8 +30,12 @@ const ALLOWED = [
   'dailytotals_t3trading',
   'monthly_exceeding_t3global',
   'monthly_exceeding_t3trading',
+<<<<<<< HEAD
   'OBA',
   'LocatesData',   // ← newly added
+=======
+  'OBA'
+>>>>>>> eff7a4428ac11e26b85b28ef22b2758fae631b2b
 ]
 
 export default async function handler(

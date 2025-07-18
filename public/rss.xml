@@ -4,7 +4,11 @@
         <title>T3 Trading Group LLC</title>
         <link>http://localhost:3000</link>
         <description>Admin</description>
+<<<<<<< HEAD
         <lastBuildDate>Fri, 18 Jul 2025 02:58:14 GMT</lastBuildDate>
+=======
+        <lastBuildDate>Tue, 01 Jul 2025 16:42:20 GMT</lastBuildDate>
+>>>>>>> eff7a4428ac11e26b85b28ef22b2758fae631b2b
         <docs>https://validator.w3.org/feed/docs/rss2.html</docs>
         <generator>https://github.com/jpmonette/feed</generator>
         <language>en</language>

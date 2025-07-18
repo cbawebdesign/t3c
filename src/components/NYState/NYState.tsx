@@ -19,8 +19,13 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID!,
 }
 
+<<<<<<< HEAD
 initializeApp(firebaseConfig)
 const auth = getAuth()
+=======
+const app = initializeApp(firebaseConfig)
+const auth = getAuth(app)
+>>>>>>> eff7a4428ac11e26b85b28ef22b2758fae631b2b
 
 export default function OBAViewer() {
   // Auth state
@@ -72,9 +77,13 @@ export default function OBAViewer() {
       const res = await fetch(url)
       if (!res.ok) throw new Error(await res.text())
       let data = await res.json()
+<<<<<<< HEAD
       if (showOnlyUnreviewed) {
         data = data.filter((d: any) => !d.reviewed)
       }
+=======
+      if (showOnlyUnreviewed) data = data.filter((d: any) => !d.reviewed)
+>>>>>>> eff7a4428ac11e26b85b28ef22b2758fae631b2b
       setDocs(data)
     } catch (e: any) {
       setError(e.message)
@@ -146,12 +155,23 @@ export default function OBAViewer() {
   return (
     <div className="min-h-screen bg-black text-gray-200 p-6">
       {/* Header */}
+<<<<<<< HEAD
       <header className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">OBA Files</h1>
         <div className="flex items-center gap-4">
           <button onClick={loadData} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm">
             {loading ? 'Loading…' : 'Refresh'}
           </button>
+=======
+      <header className="flex flex-wrap justify-between items-center mb-6 gap-4">
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-bold">OBA Files</h1>
+          <button onClick={loadData} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm">
+            {loading ? 'Loading…' : 'Refresh'}
+          </button>
+        </div>
+        <div className="flex items-center gap-4">
+>>>>>>> eff7a4428ac11e26b85b28ef22b2758fae631b2b
           <p className="text-sm">Signed in as {user.email}</p>
           <button onClick={logout} className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm">
             Sign Out
@@ -194,6 +214,7 @@ export default function OBAViewer() {
         {docs.map((doc, i) => (
           <details key={doc.id} className="bg-gray-900 rounded-lg border border-gray-700">
             <summary className="flex justify-between px-4 py-2 cursor-pointer hover:bg-gray-800">
+<<<<<<< HEAD
               <div className="flex items-center space-x-4">
                 {/* Show the human-friendly file name */}
                 <span className="font-medium">{doc.name}</span>
@@ -208,6 +229,10 @@ export default function OBAViewer() {
                 }}
                 className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm"
               >
+=======
+              <span className="font-medium">{doc.id}</span>
+              <button onClick={(e) => { e.stopPropagation(); window.open(doc.downloadURL!, '_blank') }} className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm">
+>>>>>>> eff7a4428ac11e26b85b28ef22b2758fae631b2b
                 Download File
               </button>
             </summary>
@@ -216,6 +241,7 @@ export default function OBAViewer() {
                 <button
                   onClick={(e) => markReviewed(doc.id, i, e)}
                   disabled={doc.reviewed}
+<<<<<<< HEAD
                   className={`px-3 py-1 rounded text-sm transition transform ${
                     doc.reviewed ? 'bg-gray-700 cursor-default' : 'bg-blue-600 hover:bg-blue-700 scale-110'
                   }`}
@@ -234,6 +260,15 @@ export default function OBAViewer() {
               <p>
                 <strong>Year:</strong> {doc.Year}
               </p>
+=======
+                  className={`px-3 py-1 rounded text-sm transition transform ${doc.reviewed ? 'bg-gray-700 cursor-default' : 'bg-blue-600 hover:bg-blue-700 scale-110'}`}>
+                  {doc.reviewed ? 'Reviewed' : 'Review'}
+                </button>
+                {doc.reviewed && <span className="text-xs text-green-400">by {doc.reviewedBy} @ {new Date(doc.reviewedAt).toLocaleString()}</span>}
+              </div>
+              <p><strong>Month:</strong> {doc.Month}</p>
+              <p><strong>Year:</strong> {doc.Year}</p>
+>>>>>>> eff7a4428ac11e26b85b28ef22b2758fae631b2b
             </div>
           </details>
         ))}
