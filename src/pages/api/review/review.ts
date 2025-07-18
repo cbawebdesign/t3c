@@ -1,7 +1,9 @@
+// pages/api/review/review.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { initializeApp, cert, getApps } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 
+// Initialize Firebase Admin if needed
 if (!getApps().length) {
   initializeApp({
     credential: cert({
@@ -14,6 +16,7 @@ if (!getApps().length) {
 
 const db = getFirestore()
 
+// ─── Allowlist ─────────────────────────────────────────────────────
 const ALLOWED = [
   'daily_exceeding_t3global',
   'daily_exceeding_t3trading',
@@ -21,6 +24,8 @@ const ALLOWED = [
   'dailytotals_t3trading',
   'monthly_exceeding_t3global',
   'monthly_exceeding_t3trading',
+  'OBA',
+  'LocatesData',   // ← newly added
 ]
 
 export default async function handler(
@@ -38,6 +43,7 @@ export default async function handler(
     reviewedBy?: string
   }
 
+  // Validate payload and collection
   if (
     typeof collection !== 'string' ||
     !ALLOWED.includes(collection) ||

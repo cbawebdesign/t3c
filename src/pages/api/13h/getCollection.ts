@@ -1,94 +1,109 @@
 // pages/api/getCollection.ts
 import type { NextApiRequest, NextApiResponse } from 'next'
-import {
-  initializeApp,
-  cert,
-  getApps,
-  getApp,
-  App
-} from 'firebase-admin/app'
+import { initializeApp, cert, getApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 
-// ─── Load your excelsior-99019 service account from env ────────────
+// ─── Load service account from environment ───────────────────────
 const SA = {
   projectId:   process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
   clientEmail: process.env.SERVICE_ACCOUNT_CLIENT_EMAIL!,
   privateKey:  process.env.SERVICE_ACCOUNT_PRIVATE_KEY!.replace(/\\n/g, '\n'),
 }
 
-// ─── Use a named Admin app to avoid collisions ───────────────────────
 const APP_NAME = 'excelsior-data'
-
-let dataApp: App
+let dataApp
 try {
+  // reuse the named app if it exists
   dataApp = getApp(APP_NAME)
-  console.log('🔁 Reusing existing Admin app:', APP_NAME)
 } catch {
-  console.log('🚀 Initializing Admin app:', APP_NAME, 'for project', SA.projectId)
   dataApp = initializeApp({ credential: cert(SA) }, APP_NAME)
 }
-
 const db = getFirestore(dataApp)
 
+// ─── Allowed collections ────────────────────────────────────────
 const ALLOWED = [
-  'daily_exceeding_t3global',
-  'daily_exceeding_t3trading',
   'dailytotals_t3global',
   'dailytotals_t3trading',
+  'daily_exceeding_t3global',
+  'daily_exceeding_t3trading',
   'monthly_exceeding_t3global',
   'monthly_exceeding_t3trading',
+  'OBA',
+  'LocatesData',          // ← renamed
 ]
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { collection, date } = req.query
-  console.log('📬 /api/getCollection called with:', { collection, date })
+  const { collection, date, startDate, endDate } = req.query
 
-  // 1️⃣ Validate collection
   if (typeof collection !== 'string' || !ALLOWED.includes(collection)) {
-    console.warn('⚠️ Invalid collection:', collection)
     return res.status(400).json({ error: 'Collection not allowed' })
   }
 
   try {
+    const colRef = db.collection(collection)
     let docs: any[] = []
 
+    // 1) Single doc by ID or fallback to date field
     if (typeof date === 'string' && date.trim()) {
-      // 2️⃣ Try fetching by document ID
-      console.log(`🔍 Looking up doc("${collection}","${date}")`)
-      const snap = await db.collection(collection).doc(date).get()
-      console.log('   • snap.exists:', snap.exists)
-
+      const snap = await colRef.doc(date).get()
       if (snap.exists) {
         docs = [{ id: snap.id, ...snap.data() }]
       } else {
-        // 3️⃣ Fallback: query on the "date" field
-        console.log(`↻ Fallback to where("date","==","${date}")`)
-        const qSnap = await db
-          .collection(collection)
-          .where('date', '==', date)
-          .get()
-        console.log('   • qSnap.size:', qSnap.size)
+        const qSnap = await colRef.where('date', '==', date).get()
         docs = qSnap.docs.map(d => ({ id: d.id, ...d.data() }))
       }
-    } else {
-      // 4️⃣ No date param: list entire collection + log first 20 IDs
-      console.log(`📚 Fetching entire collection "${collection}"`)
-      const fullSnap = await db.collection(collection).get()
-      console.log('   • total docs:', fullSnap.size)
-      console.log(
-        '   • first 20 IDs:',
-        fullSnap.docs.slice(0, 20).map(d => d.id)
-      )
-      docs = fullSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+    }
+    // 2) Date-range query by __name__ or fallback to date field
+    else if (
+      typeof startDate === 'string' &&
+      typeof endDate === 'string' &&
+      startDate.trim() &&
+      endDate.trim()
+    ) {
+      const minD = startDate < endDate ? startDate : endDate
+      const maxD = startDate > endDate ? startDate : endDate
+      const rangeSnap = await colRef
+        .where('__name__', '>=', minD)
+        .where('__name__', '<=', maxD)
+        .get()
+      docs = rangeSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      if (docs.length === 0) {
+        const alt = await colRef
+          .where('date', '>=', minD)
+          .where('date', '<=', maxD)
+          .get()
+        docs = alt.docs.map(d => ({ id: d.id, ...d.data() }))
+      }
+    }
+    // 3) Full fetch (capped at 1000)
+    else {
+      const snap = await colRef.limit(1000).get()
+      docs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     }
 
-    console.log(`✅ Returning ${docs.length} document(s)`)
+    // 4) For LocatesData: collapse top-level numeric keys into rows[]
+    if (collection === 'LocatesData') {
+      docs = docs.map(doc => {
+        const rows: any[] = []
+        const out: any = { id: doc.id }
+        for (const [k, v] of Object.entries(doc)) {
+          if (/^\d+$/.test(k)) {
+            rows.push(v)
+          } else if (k !== 'id') {
+            out[k] = v    // ← this automatically includes any extra field you have
+          }
+        }
+        out.rows = rows
+        return out
+      })
+    }
+
     return res.status(200).json(docs)
   } catch (err: any) {
-    console.error('❌ Firestore error:', err)
+    console.error('Firestore error:', err)
     return res.status(500).json({ error: err.message })
   }
 }
